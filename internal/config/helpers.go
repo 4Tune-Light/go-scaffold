@@ -46,5 +46,8 @@ func MustLoad(cfgPath string) *Config {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatal().Err(err).Msg("invalid config")
+	}
 	return cfg
 }

@@ -9,7 +9,7 @@ type API struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
 	Error   *ErrorInfo  `json:"error,omitempty"`
-	Meta    *Meta       `json:"meta,omitempty"`
+	Meta    interface{} `json:"meta,omitempty"`
 }
 
 type ErrorInfo struct {
@@ -17,20 +17,16 @@ type ErrorInfo struct {
 	Message string `json:"message"`
 }
 
-type Meta struct {
-	Page       int   `json:"page,omitempty"`
-	PerPage    int   `json:"per_page,omitempty"`
-	Total      int64 `json:"total,omitempty"`
-	TotalPages int   `json:"total_pages,omitempty"`
+type PageMeta struct {
+	Page       int   `json:"page"`
+	PerPage    int   `json:"per_page"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
 }
 
-func Error(w http.ResponseWriter, status int, code string, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(API{
-		Success: false,
-		Error:   &ErrorInfo{Code: code, Message: message},
-	})
+type CursorMeta struct {
+	NextCursor string `json:"next_cursor"`
+	HasMore    bool   `json:"has_more"`
 }
 
 func JSON(w http.ResponseWriter, status int, data interface{}) {
@@ -45,24 +41,41 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	})
 }
 
+func Error(w http.ResponseWriter, status int, code string, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(API{
+		Success: false,
+		Error:   &ErrorInfo{Code: code, Message: message},
+	})
+}
+
 func Paginated(w http.ResponseWriter, data interface{}, page int, perPage int, total int64) {
 	totalPages := int(total) / perPage
 	if int(total)%perPage > 0 {
 		totalPages++
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(API{
 		Success: true,
 		Data:    data,
-		Meta: &Meta{
-			Page:       page,
-			PerPage:    perPage,
-			Total:      total,
-			TotalPages: totalPages,
+		Meta: &PageMeta{
+			Page: page, PerPage: perPage,
+			Total: total, TotalPages: totalPages,
 		},
 	})
 }
 
-
+func CursorPaginated(w http.ResponseWriter, data interface{}, nextCursor string, hasMore bool) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(API{
+		Success: true,
+		Data:    data,
+		Meta: &CursorMeta{
+			NextCursor: nextCursor,
+			HasMore:    hasMore,
+		},
+	})
+}
