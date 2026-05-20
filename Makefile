@@ -1,6 +1,14 @@
 MODULE := github.com/rizky/go-scaffold
 BUILD_DIR := bin
 
+migrate-up:
+	@echo "Running migrations up..."
+	go run ./scripts/migrate up
+
+migrate-down:
+	@echo "Running migrations down..."
+	go run ./scripts/migrate down
+
 build:
 	@echo "Building all services..."
 	@mkdir -p $(BUILD_DIR)

@@ -23,6 +23,7 @@ func (m *mockService) Greet(ctx context.Context, name string) (*dto.GreetRespons
 func router(h *Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/greet/{name}", h.Greet)
+	r.Post("/greet/{name}", h.CreateGreeting)
 	return r
 }
 
@@ -49,4 +50,29 @@ func TestGreetHandler_ServiceError(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestCreateGreetingHandler_Success(t *testing.T) {
+	svc := &mockService{greetResult: &dto.GreetResponse{Message: "Hello, Jane!"}}
+	h := NewHandler(svc)
+	r := router(h)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/greet/Jane", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Contains(t, w.Body.String(), `"Hello, Jane!"`)
+}
+
+func TestCreateGreetingHandler_ServiceError(t *testing.T) {
+	svc := &mockService{greetErr: ErrNameRequired}
+	h := NewHandler(svc)
+	r := router(h)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/greet/someone", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

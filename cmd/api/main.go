@@ -44,6 +44,7 @@ func main() {
 	var checker *health.Checker
 	var idempStore *idempotency.Store
 	var greeterHandler *greeter.Handler
+	var greeterSvc greeter.Service
 
 	if pgPool, err := database.NewPostgresPool(ctx, cfg.PostgresConfig()); err != nil {
 		log.Warn().Err(err).Msg("PostgreSQL not available")
@@ -51,7 +52,8 @@ func main() {
 		defer pgPool.Close()
 		q := database.NewQuerier(pgPool)
 		tx := database.NewTransactor(pgPool)
-		greeterHandler = greeter.NewHandler(greeter.NewService(greeter.NewRepository(q), tx))
+		greeterSvc = greeter.NewService(greeter.NewRepository(q), tx)
+		greeterHandler = greeter.NewHandler(greeterSvc)
 
 		if rdb, err := database.NewRedisClient(ctx, cfg.RedisConfig()); err != nil {
 			log.Warn().Err(err).Msg("Redis not available")
@@ -84,6 +86,9 @@ func main() {
 	svr := []server.Server{httpSrv}
 	if grpcSrv != nil {
 		svr = append(svr, grpcSrv)
+		if greeterSvc != nil {
+			greeter.RegisterGRPC(grpcSrv.Server(), greeterSvc)
+		}
 	}
 
 	mgr := server.NewManager(svr...)

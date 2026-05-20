@@ -8,11 +8,15 @@ import (
 	"github.com/rizky/go-scaffold/pkg/response"
 )
 
+const cleanupInterval = 10 * time.Minute
+const bucketTTL = 30 * time.Minute
+
 type tokenBucket struct {
 	tokens     float64
 	maxTokens  float64
 	refillRate float64
 	lastRefill time.Time
+	lastAccess time.Time
 	mu         sync.Mutex
 }
 
@@ -22,6 +26,7 @@ func newTokenBucket(maxTokens, refillRate float64) *tokenBucket {
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
 		lastRefill: time.Now(),
+		lastAccess: time.Now(),
 	}
 }
 
@@ -33,6 +38,7 @@ func (tb *tokenBucket) allow() bool {
 	elapsed := now.Sub(tb.lastRefill).Seconds()
 	tb.tokens = min(tb.maxTokens, tb.tokens+elapsed*tb.refillRate)
 	tb.lastRefill = now
+	tb.lastAccess = now
 
 	if tb.tokens >= 1 {
 		tb.tokens--
@@ -47,7 +53,27 @@ type RateLimiter struct {
 }
 
 func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{buckets: make(map[string]*tokenBucket)}
+	rl := &RateLimiter{buckets: make(map[string]*tokenBucket)}
+	go rl.periodicCleanup()
+	return rl
+}
+
+func (rl *RateLimiter) periodicCleanup() {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		rl.mu.Lock()
+		for key, bucket := range rl.buckets {
+			bucket.mu.Lock()
+			stale := time.Since(bucket.lastAccess) > bucketTTL
+			bucket.mu.Unlock()
+			if stale {
+				delete(rl.buckets, key)
+			}
+		}
+		rl.mu.Unlock()
+	}
 }
 
 func (rl *RateLimiter) Limit(maxTokens, refillRate float64) func(http.Handler) http.Handler {
