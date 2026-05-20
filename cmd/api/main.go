@@ -12,11 +12,13 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/rizky/go-scaffold/internal/config"
+	"github.com/rizky/go-scaffold/internal/greeter"
 	"github.com/rizky/go-scaffold/internal/health"
 	"github.com/rizky/go-scaffold/internal/middleware"
 	"github.com/rizky/go-scaffold/internal/server"
 	"github.com/rizky/go-scaffold/internal/telemetry"
 	"github.com/rizky/go-scaffold/pkg/database"
+	"github.com/rizky/go-scaffold/pkg/idempotency"
 )
 
 func main() {
@@ -40,28 +42,38 @@ func main() {
 	}
 
 	var checker *health.Checker
+	var idempStore *idempotency.Store
+	var greeterHandler *greeter.Handler
 
 	if pgPool, err := database.NewPostgresPool(ctx, cfg.PostgresConfig()); err != nil {
 		log.Warn().Err(err).Msg("PostgreSQL not available")
 	} else {
 		defer pgPool.Close()
+		q := database.NewQuerier(pgPool)
+		tx := database.NewTransactor(pgPool)
+		greeterHandler = greeter.NewHandler(greeter.NewService(greeter.NewRepository(q), tx))
+
 		if rdb, err := database.NewRedisClient(ctx, cfg.RedisConfig()); err != nil {
 			log.Warn().Err(err).Msg("Redis not available")
 			checker = health.New(pgPool, nil)
 		} else {
 			defer rdb.Close()
 			checker = health.New(pgPool, rdb)
+			idempStore = idempotency.NewStore(rdb)
 		}
 	}
 
 	if checker == nil {
 		checker = health.New(nil, nil)
 	}
+	if idempStore == nil {
+		idempStore = idempotency.NewStore(nil)
+	}
 
 	httpSrv := server.NewHTTPServer("api",
 		cfg.Server.HTTP.Host, cfg.Server.HTTP.Port, cfg.Server.HTTP.ReadTimeout)
 
-	registerRoutes(httpSrv.Router(), checker)
+	registerRoutes(httpSrv.Router(), checker, idempStore, cfg, greeterHandler)
 
 	grpcSrv, err := server.NewGRPCServer("grpc", cfg.Server.GRPC.Host, cfg.Server.GRPC.Port)
 	if err != nil {
@@ -82,12 +94,15 @@ func main() {
 	}
 }
 
-func registerRoutes(r chi.Router, checker *health.Checker) {
+func registerRoutes(r chi.Router, checker *health.Checker, idempStore *idempotency.Store, cfg *config.Config, greeterH *greeter.Handler) {
 	r.Use(chimiddleware.RequestID)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
+	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORS([]string{"*"}))
+	r.Use(middleware.OTelHTTP(cfg.OTel.ServiceName))
+	r.Use(middleware.Idempotency(idempStore))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		status := checker.Check(r.Context())
@@ -95,4 +110,8 @@ func registerRoutes(r chi.Router, checker *health.Checker) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(status)
 	})
+
+	if greeterH != nil {
+		greeter.RegisterRoutes(r, greeterH, cfg.JWT.Secret)
+	}
 }

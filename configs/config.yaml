@@ -41,3 +41,6 @@ otel:
   endpoint: localhost:4317
   insecure: true
   trace_ratio: 0.1
+
+jwt:
+  secret: change-me-in-production

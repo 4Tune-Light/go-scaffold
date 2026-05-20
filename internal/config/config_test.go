@@ -60,6 +60,7 @@ func TestValidate_Valid(t *testing.T) {
 		App: App{Name: "test"},
 		Server: Server{HTTP: ServerHTTP{Port: 8080}},
 		Database: Database{Postgres: Postgres{Host: "localhost", User: "u", DBName: "d"}},
+		JWT: JWT{Secret: "test-secret"},
 	}
 	err := cfg.Validate()
 	assert.NoError(t, err)
@@ -80,7 +81,9 @@ database:
     sslmode: disable
 redis:
   host: localhost
-  port: 6379`
+  port: 6379
+jwt:
+  secret: test-secret`
 
 	yamlPath := filepath.Join(dir, "config.yaml")
 	writeFile(t, yamlPath, yaml)

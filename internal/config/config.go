@@ -46,6 +46,9 @@ func (c *Config) Validate() error {
 	if c.Server.HTTP.Port == 0 {
 		errs = append(errs, errors.New("server.http.port is required"))
 	}
+	if c.JWT.Secret == "" {
+		errs = append(errs, errors.New("jwt.secret is required"))
+	}
 	if c.Database.Postgres.Host == "" {
 		errs = append(errs, errors.New("database.postgres.host is required"))
 	}

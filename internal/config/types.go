@@ -8,6 +8,11 @@ type Config struct {
 	Database Database `mapstructure:"database"`
 	Redis    Redis    `mapstructure:"redis"`
 	OTel     OTel     `mapstructure:"otel"`
+	JWT      JWT      `mapstructure:"jwt"`
+}
+
+type JWT struct {
+	Secret string `mapstructure:"secret"`
 }
 
 type App struct {

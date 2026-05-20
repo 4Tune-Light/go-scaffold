@@ -7,15 +7,16 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rizky/go-scaffold/internal/greeter/dto"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockService struct {
-	greetResult string
+	greetResult *dto.GreetResponse
 	greetErr    error
 }
 
-func (m *mockService) Greet(ctx context.Context, name string) (string, error) {
+func (m *mockService) Greet(ctx context.Context, name string) (*dto.GreetResponse, error) {
 	return m.greetResult, m.greetErr
 }
 
@@ -26,7 +27,7 @@ func router(h *Handler) http.Handler {
 }
 
 func TestGreetHandler_Success(t *testing.T) {
-	svc := &mockService{greetResult: "Hello, John!"}
+	svc := &mockService{greetResult: &dto.GreetResponse{Message: "Hello, John!"}}
 	h := NewHandler(svc)
 	r := router(h)
 
